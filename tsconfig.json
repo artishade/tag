@@ -9,7 +9,7 @@
     "sourceMap": true,
     "isolatedModules": true,
     "noEmit": true,
-    "lib": ["DOM", "DOMIterable", "ES2022"],
+    "lib": ["dom", "dom.iterable", "es2021"],
     "skipLibCheck": true
   },
   "include": ["src"]

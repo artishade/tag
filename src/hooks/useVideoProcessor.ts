@@ -12,14 +12,29 @@ async function loadFFmpeg(): Promise<any> {
   if (ffmpegLoading) return ffmpegLoading;
 
   ffmpegLoading = (async () => {
-    const { createFFmpeg, fetchFile } = await import("@ffmpeg/ffmpeg");
-    const ffmpeg = createFFmpeg({ log: true });
+    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    const ffmpeg = new FFmpeg();
     await ffmpeg.load();
     ffmpegInstance = ffmpeg;
     return ffmpeg;
   })();
 
   return ffmpegLoading;
+}
+
+/**
+ * Converts a File to Uint8Array for ffmpeg's virtual FS.
+ */
+function fileToUint8Array(file: File): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const arrayBuffer = reader.result as ArrayBuffer;
+      resolve(new Uint8Array(arrayBuffer));
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 /**
@@ -47,13 +62,12 @@ export function useVideoProcessor() {
         return;
       }
 
-      const { fetchFile } = ffmpeg;
       const inputName = "input.mp4";
       const outputName = "output.mp4";
 
       try {
         // Write input file to ffmpeg's virtual FS
-        ffmpeg.FS("writeFile", inputName, await fetchFile(file));
+        ffmpeg.FS("writeFile", inputName, await fileToUint8Array(file));
 
         // Build the ffmpeg command
         // For text watermark, we use drawtext filter
