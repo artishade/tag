@@ -40,6 +40,9 @@ export interface MediaItem {
 export interface MediaStore {
   items: MediaItem[];
   selectedId: string | null;
+  // Global settings — new items inherit these, and "Apply to All" overwrites items with these
+  globalWatermark: Partial<WatermarkSettings>;
+  globalLogo: Partial<LogoSettings>;
   addFiles: (files: File[]) => void;
   removeFile: (id: string) => void;
   updateWatermark: (id: string, patch: Partial<WatermarkSettings>) => void;
@@ -47,6 +50,9 @@ export interface MediaStore {
   setProcessedUrl: (id: string, url: string | null) => void;
   setStatus: (id: string, status: MediaStatus) => void;
   setSelectedId: (id: string | null) => void;
+  setGlobalWatermark: (patch: Partial<WatermarkSettings>) => void;
+  setGlobalLogo: (patch: Partial<LogoSettings>) => void;
+  applyToAll: (type: "watermark" | "logo" | "both", fromId: string) => void;
   clearAll: () => void;
 }
 
@@ -101,6 +107,8 @@ export const useMediaStore = create<MediaStore>()(
     (set) => ({
       items: [],
       selectedId: null,
+      globalWatermark: {},
+      globalLogo: {},
 
       addFiles: (files: File[]) =>
         set((state) => {
@@ -114,8 +122,8 @@ export const useMediaStore = create<MediaStore>()(
               type: getMediaType(file),
               status: "idle" as MediaStatus,
               processedUrl: null,
-              watermark: { ...DEFAULT_WATERMARK },
-              logo: { ...DEFAULT_LOGO },
+              watermark: { ...DEFAULT_WATERMARK, ...state.globalWatermark },
+              logo: { ...DEFAULT_LOGO, ...state.globalLogo },
             };
           });
           return {
@@ -182,6 +190,50 @@ export const useMediaStore = create<MediaStore>()(
 
       setSelectedId: (id) => set({ selectedId: id }),
 
+      setGlobalWatermark: (patch) =>
+        set((state) => ({
+          globalWatermark: { ...state.globalWatermark, ...patch },
+        })),
+
+      setGlobalLogo: (patch) =>
+        set((state) => {
+          const current = state.globalLogo;
+          let dataUrl: string | null;
+          if (patch.file !== undefined) {
+            dataUrl = patch.file ? URL.createObjectURL(patch.file) : null;
+          } else if (patch.dataUrl !== undefined) {
+            dataUrl = patch.dataUrl;
+          } else {
+            dataUrl = current.dataUrl ?? null;
+          }
+          return {
+            globalLogo: {
+              ...current,
+              ...patch,
+              dataUrl,
+            },
+          };
+        }),
+
+      applyToAll: (type, fromId) =>
+        set((state) => {
+          const item = state.items.find((i) => i.id === fromId);
+          if (!item) return state;
+          return {
+            items: state.items.map((i) => {
+              if (i.id === fromId) return i;
+              const updated = { ...i };
+              if (type === "watermark" || type === "both") {
+                updated.watermark = { ...item.watermark };
+              }
+              if (type === "logo" || type === "both") {
+                updated.logo = { ...item.logo };
+              }
+              return updated;
+            }),
+          };
+        }),
+
       clearAll: () =>
         set((state) => {
           state.items.forEach((i) => {
@@ -189,7 +241,11 @@ export const useMediaStore = create<MediaStore>()(
             if (i.processedUrl) URL.revokeObjectURL(i.processedUrl);
             if (i.logo.dataUrl) URL.revokeObjectURL(i.logo.dataUrl);
           });
-          return { items: [], selectedId: null };
+          // Revoke global logo dataUrl
+          if (state.globalLogo.dataUrl) {
+            URL.revokeObjectURL(state.globalLogo.dataUrl);
+          }
+          return { items: [], selectedId: null, globalWatermark: {}, globalLogo: {} };
         }),
     }),
     { name: "media-store" }

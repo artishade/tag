@@ -3,6 +3,7 @@ import "./App.css";
 import UploadZone from "./components/UploadZone";
 import MediaGrid from "./components/MediaGrid";
 import DownloadSection from "./components/DownloadSection";
+import GlobalControls from "./components/GlobalControls";
 import { useMediaStore } from "./store/mediaStore";
 
 const App: React.FC = () => {
@@ -21,6 +22,7 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <UploadZone />
+        <GlobalControls />
         {items.length > 0 && <MediaGrid />}
       </main>
 

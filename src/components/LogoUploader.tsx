@@ -154,9 +154,11 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({ logo, onChange }) => {
             />
           </div>
 
-          {/* Position */}
+          {/* Position preset */}
           <div>
-            <label className="block text-xs text-gray-600 mb-1">Position</label>
+            <label className="block text-xs text-gray-600 mb-1">
+              Position Preset
+            </label>
             <select
               value={logo.position}
               onChange={handlePositionChange}
@@ -169,6 +171,33 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({ logo, onChange }) => {
               ))}
             </select>
           </div>
+
+          {/* Custom position (drag) hint */}
+          {(logo.customX !== undefined || logo.customY !== undefined) && (
+            <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+              <div className="font-medium text-blue-800 mb-1">
+                Custom Position (via drag)
+              </div>
+              <div className="text-blue-700">
+                X: {logo.customX !== undefined ? Math.round(logo.customX * 100) : "?"}%
+                {"  ·  "}
+                Y: {logo.customY !== undefined ? Math.round(logo.customY * 100) : "?"}%
+              </div>
+              <button
+                onClick={() => onChange({ customX: undefined, customY: undefined })}
+                className="mt-1 text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                Reset to preset
+              </button>
+            </div>
+          )}
+
+          {/* Drag hint — only show when no custom position is set yet */}
+          {logo.customX === undefined && logo.customY === undefined && (
+            <div className="p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
+              💡 Tip: Drag the logo directly on the media preview above to reposition it freely.
+            </div>
+          )}
         </>
       )}
     </div>

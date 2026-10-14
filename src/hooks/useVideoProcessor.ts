@@ -64,22 +64,20 @@ export function useVideoProcessor() {
 
       const inputName = "input.mp4";
       const outputName = "output.mp4";
+      const logoName = "logo.png";
 
       try {
         // Write input file to ffmpeg's virtual FS
         ffmpeg.FS("writeFile", inputName, await fileToUint8Array(file));
 
-        // Build the ffmpeg command
-        // For text watermark, we use drawtext filter
         const watermark = item.watermark;
         const logo = item.logo;
 
-        let vf = "";
         const filters: string[] = [];
 
         // Text watermark filter
         if (watermark.text) {
-          const { x, y } = getTextPosition(watermark, item.file);
+          const { x, y } = getTextPosition(watermark);
           const fontSize = Math.round(watermark.fontSize);
           const color = watermark.color.replace("#", "0x");
           const fontAlpha = Math.round(watermark.opacity * 255).toString(16).padStart(2, "0");
@@ -90,21 +88,38 @@ export function useVideoProcessor() {
         }
 
         // Logo overlay filter
-        if (logo.dataUrl) {
+        if (logo.dataUrl && logo.file) {
           const logoData = await fetch(logo.dataUrl).then((r) => r.arrayBuffer());
-          const logoName = "logo.png";
           ffmpeg.FS("writeFile", logoName, new Uint8Array(logoData));
 
-          const { x, y } = getLogoPosition(logo, item.file);
-          const scale = Math.round(logo.scale * 100);
-          const opacity = (logo.opacity * 100).toFixed(2);
+          const { x, y } = getLogoPosition(logo);
+
+          // Scale logo: logo.scale (0.1–2) is relative to video width
+          // We use a fixed max size of 300px as baseline — scale factor adjusts from there
+          // This is a reasonable approximation for most video sizes
+          const baseLogoSize = 300;
+          const logoSize = Math.round(baseLogoSize * logo.scale);
+
+          // Build the logo filter chain: scale → rotate → opacity
+          const logoFilters = [`scale=${logoSize}:-1`];
+
+          // Rotation (convert degrees to radians for ffmpeg rotate filter)
+          if (logo.rotation % 360 !== 0) {
+            const rad = (logo.rotation * Math.PI) / 180;
+            logoFilters.push(`rotate=${rad}:bilinear=0`);
+          }
+
+          // Opacity via lut on alpha channel (lut=a=val*opacity)
+          if (logo.opacity < 1) {
+            logoFilters.push(`lut=a=val*${logo.opacity}`);
+          }
 
           filters.push(
-            `movie=${logoName}[logo];[${scale}scale=${scale}:${scale}][logo];overlay=${x}:${y}`
+            `movie=${logoName}[logo];[logo]${logoFilters.join(",")}[logo];[in][logo]overlay=${x}:${y}:format=auto`
           );
         }
 
-        vf = filters.join(",");
+        const vf = filters.join(",");
 
         const cmd: string[] = ["-i", inputName];
         if (vf) {
@@ -127,9 +142,9 @@ export function useVideoProcessor() {
         // Clean up virtual FS
         ffmpeg.FS("unlink", inputName);
         ffmpeg.FS("unlink", outputName);
-        if (logo.dataUrl) {
+        if (logo.dataUrl && logo.file) {
           try {
-            ffmpeg.FS("unlink", "logo.png");
+            ffmpeg.FS("unlink", logoName);
           } catch {}
         }
       } catch (err) {
@@ -147,55 +162,70 @@ export function useVideoProcessor() {
 
 /**
  * Calculates text position for ffmpeg drawtext filter.
- * Returns ffmpeg-compatible x:y coordinates.
+ * Returns ffmpeg-compatible x:y coordinate expressions.
+ * Uses ffmpeg's built-in variables (w, h for text box; W, H for main video).
  */
 function getTextPosition(
   watermark: {
     position: string;
     customX?: number;
     customY?: number;
-  },
-  file: File
+  }
 ): { x: string; y: string } {
-  // We use ffmpeg expressions for positioning
+  // Custom position uses ffmpeg expressions referencing main input dimensions (W, H)
+  if (watermark.customX !== undefined && watermark.customY !== undefined) {
+    return {
+      x: `W*${watermark.customX}`,
+      y: `H*${watermark.customY}`,
+    };
+  }
+
+  // Preset positions use ffmpeg expressions
   switch (watermark.position) {
     case "top-left":
       return { x: "10", y: "10" };
     case "top-right":
-      return { x: "w-tw-10", y: "10" };
+      return { x: "W-tw-10", y: "10" };
     case "center":
-      return { x: "(w-tw)/2", y: "(h-th)/2" };
+      return { x: "(W-tw)/2", y: "(H-th)/2" };
     case "bottom-left":
-      return { x: "10", y: "h-th-10" };
+      return { x: "10", y: "H-th-10" };
     case "bottom-right":
     default:
-      return { x: "w-tw-10", y: "h-th-10" };
+      return { x: "W-tw-10", y: "H-th-10" };
   }
 }
 
 /**
  * Calculates logo position for ffmpeg overlay filter.
+ * Uses ffmpeg's built-in variables (W, H for main; w, h for overlay).
  */
 function getLogoPosition(
   logo: {
     position: string;
     customX?: number;
     customY?: number;
-    scale: number;
-  },
-  file: File
+  }
 ): { x: string; y: string } {
+  // Custom position uses ffmpeg expressions referencing main input dimensions (W, H)
+  if (logo.customX !== undefined && logo.customY !== undefined) {
+    return {
+      x: `W*${logo.customX}`,
+      y: `H*${logo.customY}`,
+    };
+  }
+
   switch (logo.position) {
     case "top-left":
       return { x: "10", y: "10" };
     case "top-right":
-      return { x: "w-W-10", y: "10" };
+      return { x: "W-w-10", y: "10" };
     case "center":
       return { x: "(W-w)/2", y: "(H-h)/2" };
     case "bottom-left":
       return { x: "10", y: "H-h-10" };
     case "bottom-right":
     default:
-      return { x: "w-W-10", y: "h-H-10" };
+      return { x: "W-w-10", y: "H-h-10" };
   }
 }

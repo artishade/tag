@@ -3,8 +3,10 @@ import { MediaItem as MediaItemType } from "../store/mediaStore";
 import { useMediaStore } from "../store/mediaStore";
 import WatermarkControls from "./WatermarkControls";
 import LogoUploader from "./LogoUploader";
+import PreviewModal from "./PreviewModal";
 import { useImageProcessor } from "../hooks/useImageProcessor";
 import { useVideoProcessor } from "../hooks/useVideoProcessor";
+import { calculatePosition, drawWatermark, drawLogo } from "../lib/canvasUtils";
 
 interface MediaItemProps {
   item: MediaItemType;
@@ -18,8 +20,11 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isSelected, onSelect }) => 
   const removeFile = useMediaStore((s) => s.removeFile);
   const updateWatermark = useMediaStore((s) => s.updateWatermark);
   const updateLogo = useMediaStore((s) => s.updateLogo);
+  const applyToAll = useMediaStore((s) => s.applyToAll);
+  const itemCount = useMediaStore((s) => s.items.length);
 
   const [showControls, setShowControls] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const fileSizeMB = Math.round((item.file.size / (1024 * 1024)) * 100) / 100;
 
   const handleApplyWatermark = async () => {
@@ -80,9 +85,13 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isSelected, onSelect }) => 
           </div>
         )}
 
-        {/* Watermark + Logo overlay on preview (visual only) */}
+        {/* Watermark + Logo overlay on preview */}
         {hasOverlay && item.url && (
-          <OverlayPreview item={item} />
+          <InteractiveOverlay
+            item={item}
+            isSelected={isSelected}
+            showControls={showControls}
+          />
         )}
 
         {/* File info badge */}
@@ -144,6 +153,34 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isSelected, onSelect }) => 
                   : "Apply Watermark"}
               </button>
 
+              {/* Preview button — shows full-fidelity preview modal */}
+              {hasOverlay && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPreview(true);
+                  }}
+                  className="px-3 py-2 text-xs text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-200"
+                  title="Preview watermark + logo placement"
+                >
+                  👁️ Preview
+                </button>
+              )}
+
+              {/* Apply to All — copies this item's watermark + logo to all other items */}
+              {itemCount > 1 && hasOverlay && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    applyToAll("both", item.id);
+                  }}
+                  className="px-3 py-2 text-xs text-purple-600 hover:bg-purple-50 rounded border border-purple-200"
+                  title="Apply current settings to all media"
+                >
+                  ↗ Apply to All
+                </button>
+              )}
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -182,17 +219,51 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isSelected, onSelect }) => 
         )}
       </div>
     </div>
+
+    {showPreview && <PreviewModal item={item} onClose={() => setShowPreview(false)} />}
   );
 };
 
 /**
  * Renders a canvas-based preview of the watermark + logo overlay.
- * This is purely visual — the real processing happens on the hidden canvas
- * when the user clicks "Apply Watermark".
+ * When a logo is present and the item is selected with controls open,
+ * the logo is draggable — dragging updates customX/customY in the store.
  */
-const OverlayPreview: React.FC<{ item: MediaItemType }> = ({ item }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+interface InteractiveOverlayProps {
+  item: MediaItemType;
+  isSelected: boolean;
+  showControls: boolean;
+}
 
+const InteractiveOverlay: React.FC<InteractiveOverlayProps> = ({
+  item,
+  isSelected,
+  showControls,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const logoImgRef = useRef<HTMLImageElement | null>(null);
+  const draggingRef = useRef(false);
+
+  const updateLogo = useMediaStore((s) => s.updateLogo);
+
+  const [logoLoaded, setLogoLoaded] = useState(false);
+
+  // Preload logo image
+  useEffect(() => {
+    if (item.logo.dataUrl) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => setLogoLoaded(true);
+      img.src = item.logo.dataUrl;
+      logoImgRef.current = img;
+    } else {
+      logoImgRef.current = null;
+      setLogoLoaded(false);
+    }
+  }, [item.logo.dataUrl]);
+
+  // Draw the overlay preview
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -200,50 +271,177 @@ const OverlayPreview: React.FC<{ item: MediaItemType }> = ({ item }) => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const displayWidth = canvas.offsetWidth;
+    const displayHeight = canvas.offsetHeight;
 
-      // Only draw overlay if there are settings
-      if (!item.watermark.text && !item.logo.file) return;
+    // We draw at display size for preview
+    const w = displayWidth;
+    const h = displayHeight;
+    if (w === 0 || h === 0) return;
 
-      // Draw watermark text
-      if (item.watermark.text) {
-        ctx.globalAlpha = item.watermark.opacity;
-        ctx.fillStyle = item.watermark.color;
-        ctx.font = `bold ${Math.min(24, item.watermark.fontSize)}px Inter, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.fillText(item.watermark.text, canvas.width / 2, 40);
-      }
+    canvas.width = w;
+    canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
 
-      // Draw logo placeholder if set
-      if (item.logo.file && item.logo.dataUrl) {
-        const logoImg = new Image();
-        logoImg.onload = () => {
-          ctx.globalAlpha = item.logo.opacity;
-          ctx.drawImage(
-            logoImg,
-            10,
-            10,
-            80,
-            80
-          );
-        };
-        logoImg.src = item.logo.dataUrl;
+    // Only draw overlay if there are settings
+    if (!item.watermark.text && !item.logo.file) return;
+
+    // Draw watermark text
+    if (item.watermark.text) {
+      const wmPos = calculatePosition(
+        w,
+        h,
+        item.watermark.position,
+        item.watermark.customX,
+        item.watermark.customY
+      );
+      drawWatermark(
+        ctx,
+        item.watermark.text,
+        Math.min(32, item.watermark.fontSize),
+        item.watermark.opacity,
+        item.watermark.color,
+        wmPos.x,
+        wmPos.y,
+        item.watermark.position
+      );
+    }
+
+    // Draw logo if available and loaded
+    if (item.logo.file && item.logo.dataUrl && logoLoaded && logoImgRef.current) {
+      const logoPos = calculatePosition(
+        w,
+        h,
+        item.logo.position,
+        item.logo.customX,
+        item.logo.customY
+      );
+      drawLogo(
+        ctx,
+        logoImgRef.current,
+        item.logo.scale,
+        item.logo.opacity,
+        item.logo.rotation,
+        logoPos.x,
+        logoPos.y,
+        item.logo.position
+      );
+    }
+  }, [item.watermark, item.logo, item.url, logoLoaded]);
+
+  const canDrag = isSelected && showControls && !!item.logo.file;
+
+  // Track the container's display dimensions for hit-area positioning
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+
+  // Measure container dimensions on resize
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        setContainerSize({
+          w: containerRef.current.offsetWidth,
+          h: containerRef.current.offsetHeight,
+        });
       }
     };
-    img.src = item.url;
-  }, [item.watermark, item.logo, item.url]);
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
+
+  // Compute logo pixel position for the drag hit area
+  const logoPixelPos =
+    canDrag && containerSize.w > 0
+      ? calculatePosition(
+          containerSize.w,
+          containerSize.h,
+          item.logo.position,
+          item.logo.customX,
+          item.logo.customY
+        )
+      : null;
+
+  const logoHitSize = canDrag && containerSize.w > 0
+    ? Math.min(120, item.logo.scale * containerSize.w)
+    : 0;
+
+  // Drag handling — document-level listeners for drag tracking
+  useEffect(() => {
+    if (!canDrag || !logoPixelPos) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const dist = Math.sqrt(
+        Math.pow(e.clientX - logoPixelPos.x, 2) + Math.pow(e.clientY - logoPixelPos.y, 2)
+      );
+
+      if (dist > logoHitSize) return; // click was not near the logo
+
+      e.stopPropagation(); // prevent parent onClick (selection) from firing
+      draggingRef.current = true;
+      e.preventDefault();
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Convert to relative (0–1) coordinates
+      const relX = Math.max(0, Math.min(1, x / rect.width));
+      const relY = Math.max(0, Math.min(1, y / rect.height));
+
+      updateLogo(item.id, { customX: relX, customY: relY });
+    };
+
+    const handleMouseUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+    };
+
+    containerRef.current?.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("mousemove", handleMouseMove, { passive: false });
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      containerRef.current?.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [canDrag, logoPixelPos, logoHitSize, item.id, updateLogo]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute top-0 left-0 w-full h-full object-contain opacity-30 pointer-events-none"
-      style={{ objectFit: "contain" }}
-    />
+    <div
+      ref={containerRef}
+      className="absolute top-0 left-0 w-full h-full"
+      style={{ pointerEvents: "none" }}
+    >
+      {/* Visual canvas — always pointer-events: none so clicks pass through */}
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full opacity-70"
+        style={{ objectFit: "contain" }}
+      />
+
+      {/* Transparent drag hit-area for the logo — only when editable */}
+      {canDrag && logoPixelPos && (
+        <div
+          className="absolute border-2 border-dashed border-blue-400 rounded-full"
+          style={{
+            left: `${logoPixelPos.x - logoHitSize / 2}px`,
+            top: `${logoPixelPos.y - logoHitSize / 2}px`,
+            width: `${logoHitSize}px`,
+            height: `${logoHitSize}px`,
+            pointerEvents: "auto",
+            cursor: "grab",
+          }}
+        />
+      )}
+    </div>
   );
 };
 

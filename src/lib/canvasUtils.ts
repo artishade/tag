@@ -58,13 +58,19 @@ export function drawLogo(
   const maxWidth = 400; // cap logo rendering width for processing
   const aspect = logoWidth / logoHeight;
 
+  // Scale: 0–1 relative to a reference width (400px baseline)
+  // e.g., scale=0.2 → logo is 80px wide, scale=1.0 → max 400px wide
+  const targetWidth = Math.min(maxWidth, maxWidth * scale);
+  const targetHeight = targetWidth / aspect;
+
+  // Use the smaller of natural or scaled dimensions
   let drawW: number;
   let drawH: number;
   if (logoWidth > logoHeight) {
-    drawW = Math.min(logoWidth, maxWidth);
+    drawW = Math.min(logoWidth, targetWidth);
     drawH = drawW / aspect;
   } else {
-    drawH = Math.min(logoHeight, maxWidth);
+    drawH = Math.min(logoHeight, targetHeight);
     drawW = drawH * aspect;
   }
 
