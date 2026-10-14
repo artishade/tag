@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "sourceMap": true,
+    "importMapPath": "./node_modules/.vite/deps/import-map.json",
+    "isolatedModules": true,
+    "noEmit": true,
+    "lib": ["DOM", "DOMIterable", "ES2024"],
+    "skipLibCheck": true,
+    "types": ["vitest/globals"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
