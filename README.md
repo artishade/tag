@@ -1,6 +1,6 @@
 # Tag — Media Watermark Dashboard
 
-A beautiful web dashboard for uploading multiple media files (images & videos), adding custom watermark text and logo overlays, then downloading the processed results.
+A beautiful, privacy-first web dashboard for uploading multiple media files (images & videos), adding custom watermark text and logo overlays, then downloading the processed results. All processing happens locally in the browser — no files are uploaded to any server.
 
 ## Features
 
@@ -8,28 +8,33 @@ A beautiful web dashboard for uploading multiple media files (images & videos), 
 - ✅ **Text Watermark** — Add customizable text watermark (font size, color, opacity, position)
 - ✅ **Logo Overlay** — Upload a logo image, position it, scale it, rotate it, set opacity
 - ✅ **Drag-to-Position** — Drag the logo directly on the media preview to reposition it freely
-- ✅ **Live Preview** — See the watermark + logo overlay on each media item in real-time
+- ✅ **Live Preview** — See the watermark + logo overlay on each media item in real-time via canvas overlay
+- ✅ **Full Preview Modal** — Click the 👁️ Preview button to see a high-fidelity, full-canvas preview of your watermark + logo placement before processing
 - ✅ **Apply to All** — Copy current item's settings (watermark + logo) to all other uploaded media
 - ✅ **Batch Processing** — Apply watermarks to all uploaded media
 - ✅ **Download Options** — Download individual files or get all processed media as a ZIP
+- ✅ **Global Settings** — Set default watermark/logo settings that new uploads inherit automatically
+- ✅ **Privacy-First** — All processing is done client-side. No files leave your browser.
+- ✅ **Format Support** — Images: JPG, PNG, GIF, WebP, BMP, TIFF, SVG. Videos: MP4, WebM, AVI, MOV, MKV, WMV
 
 ## Tech Stack
 
 - **React 19** + **TypeScript** — Modern, type-safe frontend
 - **Vite** — Lightning-fast dev server & build tool
 - **Tailwind CSS** — Utility-first styling
-- **Zustand** — State management
+- **Zustand** — Lightweight state management with devtools
 - **react-dropzone** — Drag & drop file handling
-- **Canvas API** — Image watermarking (native)
-- **ffmpeg.wasm** — Video watermarking (lazy-loaded)
-- **JSZip + file-saver** — ZIP downloads
+- **Canvas API** — Image watermarking (native, fast)
+- **ffmpeg.wasm** — Video watermarking (lazy-loaded ~20MB, cached singleton)
+- **JSZip + file-saver** — ZIP downloads for batch export
+- **Google Fonts (Inter)** — Typography
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 20+ ([download](https://nodejs.org/))
-- npm or yarn
+- npm, yarn, or pnpm
 
 ### Installation
 
@@ -43,7 +48,7 @@ npm install
 npm run dev
 ```
 
-This starts the Vite dev server at `http://localhost:5173`.
+This starts the Vite dev server at `http://localhost:5173` and opens the app in your default browser.
 
 ### Build
 
@@ -51,62 +56,94 @@ This starts the Vite dev server at `http://localhost:5173`.
 npm run build
 ```
 
-Outputs to the `dist/` directory.
+Outputs production-ready files to the `dist/` directory.
+
+### Preview
+
+```bash
+npm run preview
+```
+
+Starts a local server to preview the production build.
 
 ## Usage
 
+### Quick Start
+
 1. **Upload Media:**
-   - Drag & drop image/video files onto the dashboard, OR
+   - Drag & drop image or video files onto the dashboard, OR
    - Click the upload zone to browse files
-   - Supported formats: JPG, PNG, GIF, WebP, SVG, MP4, WebM, AVI, MOV, MKV
+   - Supported formats: JPG, PNG, GIF, WebP, BMP, TIFF, SVG, MP4, WebM, AVI, MOV, MKV, WMV
 
-2. **Add Watermark:**
-   - Click on any media item to open its controls
-   - Type your watermark text
-   - Adjust font size, color, opacity
-   - Choose a preset position or use custom positioning
+2. **Configure Watermarks & Logo:**
+   - Click on any media item (blue border appears) to select it
+   - Click "Show Controls ▼" to open the settings panel
+   - **Text Watermark:** Type text, adjust font size, color, opacity, and preset position
+   - **Logo Overlay:** Upload a PNG logo, adjust scale, opacity, and rotation
+   - **Drag-to-Position:** Drag the dashed circular handle on the media preview to reposition the logo freely. Custom X/Y coordinates update live in the controls panel. Click "Reset to preset" to return to the predefined position.
 
-3. **Add Logo:**
-   - Upload a logo image (PNG with transparency works best)
-   - Drag to reposition, scale with the slider, rotate as needed
-   - Adjust opacity independently
-   - You can also drag the logo directly on the media preview to set a custom position
+3. **Preview:**
+   - Click 👁️ Preview to open a full-canvas modal showing exactly how the watermark and logo will appear on the final output
 
-4. **Apply to All:**
-   - When you have multiple media items and have configured watermark/logo on one,
-     click "↗ Apply to All" to copy those settings to all other media items
-
-5. **Apply & Download:**
+4. **Apply Watermark:**
    - Click "Apply Watermark" to process the media
-   - Click "↓ Download" for individual files
-   - Click "Download All as ZIP" at the bottom to get everything bundled
+   - Images process via Canvas API (fast)
+   - Videos process via ffmpeg.wasm (loads on first use, caches for subsequent videos)
+   - Status badges show progress: "Processing..." → "✓ Ready"
+
+5. **Download:**
+   - Click "↓ Download" on each item for individual files
+   - Click "Download All as ZIP" at the bottom for all processed files as a single ZIP archive
+
+### Working with Multiple Files
+
+- **Apply to All:** When you have multiple media items and have configured watermark/logo on one, click "↗ Apply to All" to copy those settings to all other items
+- **Global Settings:** Use the "Global Settings" panel (above the upload zone) to set default watermark and logo settings that new uploads will inherit automatically
 
 ## Project Structure
 
 ```
-src/
-├── components/
-│   ├── UploadZone.tsx          # Drag-drop file upload area
-│   ├── MediaGrid.tsx           # Responsive grid layout of uploaded media
-│   ├── MediaItem.tsx           # Individual media editor with controls + interactive overlay
-│   ├── WatermarkControls.tsx   # Text watermark settings panel
-│   ├── LogoUploader.tsx        # Logo upload + positioning controls
-│   ├── GlobalControls.tsx      # Global watermark + logo defaults (apply to new uploads)
-│   └── DownloadSection.tsx     # Download all / zip downloads
-├── hooks/
-│   ├── useImageProcessor.ts    # Canvas-based image watermarking
-│   └── useVideoProcessor.ts    # ffmpeg.wasm-based video watermarking
-├── store/
-│   └── mediaStore.ts           # Zustand state management (items, settings, mutations)
-├── lib/
-│   └── canvasUtils.ts          # Canvas drawing utilities (drawWatermark, drawLogo, etc.)
-├── types/
-│   └── globals.d.ts            # Type declarations for file-saver & react-dropzone
-├── App.tsx                     # Root component: header, upload zone, grid, downloads
-└── main.tsx                    # ReactDOM entry point
+root/
+├── public/
+│   └── favicon.svg
+├── src/
+│   ├── components/
+│   │   ├── UploadZone.tsx          # Drag-drop file upload area with format/size validation
+│   │   ├── MediaGrid.tsx           # Responsive grid layout of uploaded media items
+│   │   ├── MediaItem.tsx           # Individual media editor with controls + interactive canvas overlay
+│   │   ├── WatermarkControls.tsx   # Text watermark settings panel (text, size, opacity, color, position)
+│   │   ├── LogoUploader.tsx        # Logo upload + scale/opacity/rotation/position controls
+│   │   ├── GlobalControls.tsx      # Global default settings panel for new uploads
+│   │   ├── DownloadSection.tsx     # Fixed bottom bar: individual downloads + ZIP batch export
+│   │   └── PreviewModal.tsx        # Full-canvas preview modal with DPI-scaled rendering
+│   ├── hooks/
+│   │   ├── useImageProcessor.ts    # Canvas-based image watermarking (fast, native)
+│   │   └── useVideoProcessor.ts    # ffmpeg.wasm-based video watermarking (lazy-loaded)
+│   ├── lib/
+│   │   └── canvasUtils.ts          # Canvas drawing utilities: drawWatermark, drawLogo, calculatePosition, applyWatermarkToImage
+│   ├── store/
+│   │   └── mediaStore.ts           # Zustand state management: items, global settings, mutations, URL lifecycle
+│   ├── types/
+│   │   └── globals.d.ts            # Type declarations for file-saver & react-dropzone fallbacks
+│   ├── App.css                     # Custom CSS variables (color palette, scrollbar, spin animation)
+│   ├── App.tsx                     # Root component: header, upload zone, global controls, grid, downloads
+│   ├── index.css                   # Tailwind directives + custom font import (Inter)
+│   └── main.tsx                    # ReactDOM entry point (React StrictMode)
+├── .claude/
+│   └── launch.json                 # Claude Code preview server config
+├── .vercel/
+│   ├── project.json                # Vercel deployment config
+│   └── README.txt                  # Vercel project instructions
+├── index.html                      # HTML entry (root div + module script)
+├── package.json                    # Dependencies, scripts
+├── tsconfig.json                   # TypeScript config (React 19, strict mode)
+├── tsconfig.node.json              # Node-specific TS config (vite build tool)
+├── vite.config.ts                  # Vite config (React plugin, auto-open)
+├── tailwind.config.ts              # Tailwind config (content paths)
+└── postcss.config.cjs              # PostCSS plugins (Tailwind, Autoprefixer)
 ```
 
-### Connection
+### Architecture: Connection & Data Flow
 
 The application follows a **unidirectional data-flow** architecture: a single
 Zustand store owns all state, UI components read from it and dispatch mutations,
@@ -148,23 +185,44 @@ and processing hooks mutate state to reflect progress.
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                             MediaItem                                   │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  InteractiveOverlay (canvas preview of watermark + logo)       │   │
-│  │   — calculatePosition / drawWatermark / drawLogo                │   │
-│  │   — logo is draggable when selected + controls open             │   │
+│  │  Media Preview                                                  │   │
+│  │  — <img> or <video> element with native object URL             │   │
+│  │  — status overlay (spinner / error badge / "✓ Ready")            │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
-│  Controls (WatermarkControls / LogoUploader):                          │
-│   — onChange → updateWatermark / updateLogo                            │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  InteractiveOverlay (transparent canvas preview)               │   │
+│  │   — calculatePosition / drawWatermark / drawLogo                │   │
+│  │   — logo is draggable when selected + controls open             │   │
+│  │   — drag updates customX/customY (0–1 relative coords) in store │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
-│  "Apply Watermark" button:                                             │
-│   — image  → useImageProcessor.processImage(id, url)                   │
-│   — video  → useVideoProcessor.processVideo(id, file)                  │
-│                                                                         │
-│  "↗ Apply to All" button (when itemCount > 1):                          │
-│   — applyToAll("both", id)                                             │
-│                                                                         │
-│  "↓ Download" button (when processedUrl exists):                       │
-│   — fetch(processedUrl) → blob → anchor download                       │
+│  Controls (WatermarkControls / LogoUploader):                          │   │
+│   — onChange → updateWatermark / updateLogo                            │   │
+│                                                                         │   |
+│  Preview button (👁️):                                                  │   │
+│   — opens PreviewModal with current settings                            │   │
+│                                                                         │   │
+│  "Apply Watermark" button:                                             │   │
+│   — image  → useImageProcessor.processImage(id, item.url)             │   │
+│   — video  → useVideoProcessor.processVideo(id, item.file)            │   │
+│                                                                         │   │
+│  "↗ Apply to All" button (when itemCount > 1):                          │   │
+│   — applyToAll("both", id)                                             │   │
+│                                                                         │   │
+│  "↓ Download" button (when processedUrl exists):                       │   │
+│   — fetch(processedUrl) → blob → anchor download                       │   │
+└─────────────────────────────────────────────────────────────────────────┘
+           ▲
+           │
+           │ PreviewModal (full-canvas preview, triggered from GlobalControls too)
+           ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        PreviewModal                                     │
+│  — Renders source image/video first frame on high-DPI canvas            │
+│  — Overlays watermark + logo using same drawWatermark/drawLogo functions │
+│  — For videos: draws first frame via temporary <video> element          │
+│  — Provides full-fidelity preview before processing                      │
 └─────────────────────────────────────────────────────────────────────────┘
            ▲
            │
@@ -203,7 +261,7 @@ and processing hooks mutate state to reflect progress.
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Logic
+### Processing Logic
 
 The application has two parallel processing pipelines — one for **images** (Canvas API)
 and one for **videos** (ffmpeg.wasm) — that both consume the same `MediaItem`
@@ -284,6 +342,9 @@ and `getTextPosition()` / `getLogoPosition()` (ffmpeg):
 | `bottom-right` | `w - margin, h - margin` (default)       | `W - tw - 10, H - th - 10`  |
 | custom         | `w * customX, h * customY`               | `W * customX, H * customY`  |
 
+When `customX` and `customY` are defined (set via drag-to-position), they override
+the preset position and are evaluated as relative coordinates (0–1).
+
 #### Global vs per-item settings
 
 - **Global settings** (`globalWatermark`, `globalLogo` in the store) are set via
@@ -303,9 +364,21 @@ media preview. It:
    resolution using `drawWatermark` and `drawLogo`.
 3. When the item is selected and controls are open, renders a draggable
    hit-area. Mouse events track the logo position and update `customX` / `customY`
-   as relative (0–1) coordinates in the store, enabling drag-to-position.
+  as relative (0–1) coordinates in the store, enabling drag-to-position.
 
-### Usecase
+#### PreviewModal (full-fidelity preview)
+
+`PreviewModal` is a full-screen modal that provides a high-DPI preview of the
+final output. Triggered from:
+- Each `MediaItem` via the "👁️ Preview" button
+- `GlobalControls` via "Preview Global Settings on ..." button
+
+It renders the source media (image or video first frame) on a canvas scaled to
+`devicePixelRatio`, then overlays the watermark and logo using the same
+`drawWatermark` / `drawLogo` functions from `canvasUtils.ts`. This gives users
+an accurate preview before processing.
+
+## Use Cases
 
 #### 1. Quick watermark on a single photo
 
@@ -351,9 +424,18 @@ media preview. It:
 3. Drag the dashed circular handle (centered on the logo) to any position
    on the preview.
 4. The relative X/Y coordinates update live in the controls panel.
-5. Click **Reset to preset** to return to the predefined position.
+5. Click "Reset to preset" to return to the predefined position.
 
-#### 6. Processing limits & constraints
+#### 6. Preview before processing
+
+1. Configure your watermark text and/or logo on any media item.
+2. Click the 👁️ **Preview** button.
+3. The PreviewModal opens, showing a high-resolution canvas render of exactly
+   how the final output will look.
+4. Adjust settings and the preview updates live — close when satisfied.
+5. Click **Apply Watermark** to generate the final file.
+
+### Processing limits & constraints
 
 - **Max files per session:** 50
 - **Max file size:** 100 MB per file
@@ -367,6 +449,3 @@ media preview. It:
 ## License
 
 MIT.
-# tag
-#   t a g  
- 
