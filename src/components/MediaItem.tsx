@@ -44,6 +44,7 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isSelected, onSelect }) => 
   const hasOverlay = item.watermark.text || item.logo.file;
 
   return (
+    <>
     <div
       className={`border-2 rounded-xl overflow-hidden bg-white cursor-pointer transition-all ${
         isSelected
@@ -221,6 +222,7 @@ const MediaItem: React.FC<MediaItemProps> = ({ item, isSelected, onSelect }) => 
     </div>
 
     {showPreview && <PreviewModal item={item} onClose={() => setShowPreview(false)} />}
+    </>
   );
 };
 
